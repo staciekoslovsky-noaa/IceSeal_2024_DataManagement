@@ -1,0 +1,11 @@
+UPDATE surv_ice_seals_2024.geo_images_meta
+SET effort_reconciled = 'ALL_ON'
+WHERE effort_field = 'ALL';
+                        
+UPDATE surv_ice_seals_2024.geo_images_meta
+SET effort_reconciled = 'SAMPLE_ON'
+WHERE effort_field = 'SAMPLE';
+                         
+UPDATE surv_ice_seals_2024.geo_images_meta
+SET effort_reconciled = effort_field 
+WHERE effort_reconciled IS NULL;

@@ -1,0 +1,158 @@
+--Evaluate available fate data (based on footprints)
+SELECT i.fate as fate_ir_field, r.fate as fate_rgb_field
+	, count(image_group) AS num_image_sets
+FROM (SELECT * FROM surv_ice_seals_2024.geo_images_footprint WHERE image_type = 'ir_image') i
+FULL JOIN (SELECT * FROM surv_ice_seals_2024.geo_images_footprint WHERE image_type = 'rgb_image') r
+USING (image_group)
+GROUP BY i.fate, r.fate;
+
+SELECT CASE WHEN r.flight IS NULL THEN i.flight ELSE r.flight END as flight,
+	CASE WHEN r.camera_view IS NULL THEN i.camera_view ELSE r.camera_view END as camera_view,
+	i.fate as fate_ir_field, r.fate as fate_rgb_field
+	, count(image_group) AS num_image_sets
+FROM (SELECT * FROM surv_ice_seals_2024.geo_images_footprint WHERE image_type = 'ir_image') i
+FULL JOIN (SELECT * FROM surv_ice_seals_2024.geo_images_footprint WHERE image_type = 'rgb_image') r
+USING (image_group)
+GROUP BY CASE WHEN r.flight IS NULL THEN i.flight ELSE r.flight END, CASE WHEN r.camera_view IS NULL THEN i.camera_view ELSE r.camera_view END, i.fate, r.fate;
+
+--Add fields to table for storing trigger/fate/reviewed field/reconciled values
+ALTER TABLE surv_ice_seals_2024.tbl_images
+ADD COLUMN IF NOT EXISTS trigger_field VARCHAR(50),
+ADD COLUMN IF NOT EXISTS fate_field VARCHAR(50),
+ADD COLUMN IF NOT EXISTS reviewed_field VARCHAR(50),
+ADD COLUMN IF NOT EXISTS fate_reconciled VARCHAR(50);
+
+--Set values NULL when needed
+UPDATE surv_ice_seals_2024.tbl_images i
+SET trigger_field = NULL,
+	fate_field = NULL,	
+	reviewed_field = NULL
+	fate_reconciled = NULL;
+
+--Set field values to those of the rgb_image from the footprints table (the IR and UV fate/trigger values are different)
+--Can I use the ir_image trigger values to identify the nth frame where detections were found??
+UPDATE surv_ice_seals_2024.tbl_images i
+SET trigger_field = f.trigger,
+fate_field = f.fate,
+reviewed_field = f.reviewed
+FROM surv_ice_seals_2024.geo_images_footprint f
+WHERE i.image_name = f.image_name;
+
+--Evaluate available fate data (based on image inventory, once field values are populated)
+SELECT r.fate_field as fate_rgb_field, i.fate_field as fate_ir_field, u.fate_field as fate_uv_field
+	, count(image_group) AS num_image_sets
+FROM (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'ir_image') i
+FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'rgb_image') r
+USING (image_group)
+FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'uv_image') u
+USING (image_group)
+GROUP BY i.fate_field, r.fate_field, u.fate_field;
+
+SELECT CASE WHEN r.flight IS NULL THEN i.flight ELSE r.flight END as flight,
+	r.fate_field as fate_rgb_field, i.fate_field as fate_ir_field, u.fate_field as fate_uv_field
+	, count(image_group) AS num_image_sets
+FROM (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'ir_image') i
+FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'rgb_image') r
+USING (image_group)
+FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'uv_image') u
+USING (image_group)
+GROUP BY CASE WHEN r.flight IS NULL THEN i.flight ELSE r.flight END, i.fate_field, r.fate_field, u.fate_field
+ORDER BY CASE WHEN r.flight IS NULL THEN i.flight ELSE r.flight END;
+
+SELECT r.fate_field as fate_rgb_field, i.fate_field as fate_ir_field, u.fate_field as fate_uv_field
+	, count(image_group) AS num_image_sets,
+SUM(CASE WHEN m.rgb_imagezero = 'Y' THEN 1 ELSE 0 END) as num_rgb_zero
+	, SUM(CASE WHEN m.rgb_imagezero = 'N' THEN 1 ELSE 0 END) as num_rgb_image
+	, SUM(CASE WHEN m.rgb_imagezero = 'NA' THEN 1 ELSE 0 END) as num_rgb_na
+FROM (SELECT DISTINCT image_group, rgb_imagezero
+	FROM surv_ice_seals_2024.tbl_images) m
+FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'ir_image') i
+USING (image_group)
+FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'rgb_image') r
+USING (image_group)
+FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'uv_image') u
+USING (image_group)
+GROUP BY i.fate_field, r.fate_field, u.fate_field;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--Assign _reconciled values to tbl_images -- COME BACK TO THIS LATER (after digging into the data more)
+
+--Set fate_reconciled = 'unknown' (when fate_rgb_field == NULL AND when fate_ir_field == NULL)
+UPDATE surv_ice_seals_2024.tbl_images i
+SET fate_reconciled = 'unknown'
+WHERE image_group IN
+	(SELECT image_group 
+	FROM (SELECT CASE WHEN r.image_group IS NULL THEN i.image_group ELSE r.image_group END AS image_group,
+				r.fate_field as fate_rgb_field, i.fate_field as fate_ir_field, u.fate_field as fate_uv_field
+			FROM (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'ir_image') i
+			FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'rgb_image') r
+			USING (image_group)
+			FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'uv_image') u
+			USING (image_group)
+			GROUP BY CASE WHEN r.image_group IS NULL THEN i.image_group ELSE r.image_group END, i.fate_field, r.fate_field, u.fate_field) AS fate
+	WHERE fate_rgb_field IS NULL AND fate_ir_field IS NULL);
+
+--Set fate_reconciled = 'collected' (when fate_rgb_field == collected or when fate_ir_field == collected)
+UPDATE surv_ice_seals_2024.tbl_images i
+SET fate_reconciled = 'collected'
+WHERE image_group IN
+	(SELECT image_group 
+	FROM (SELECT CASE WHEN r.image_group IS NULL THEN i.image_group ELSE r.image_group END AS image_group,
+				r.fate_field as fate_rgb_field, i.fate_field as fate_ir_field, u.fate_field as fate_uv_field
+			FROM (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'ir_image') i
+			FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'rgb_image') r
+			USING (image_group)
+			FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'uv_image') u
+			USING (image_group)
+			GROUP BY CASE WHEN r.image_group IS NULL THEN i.image_group ELSE r.image_group END, i.fate_field, r.fate_field, u.fate_field) AS fate
+	WHERE fate_rgb_field = 'collected' OR fate_ir_field = 'collected');
+
+--Set fate_reconciled = 'discarded' (when fate_rgb_field == discarded)
+UPDATE surv_ice_seals_2024.tbl_images i
+SET fate_reconciled = 'discarded'
+WHERE image_group IN
+	(SELECT image_group 
+	FROM (SELECT CASE WHEN r.image_group IS NULL THEN i.image_group ELSE r.image_group END AS image_group,
+				r.fate_field as fate_rgb_field, i.fate_field as fate_ir_field, u.fate_field as fate_uv_field
+			FROM (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'ir_image') i
+			FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'rgb_image') r
+			USING (image_group)
+			FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'uv_image') u
+			USING (image_group)
+			GROUP BY CASE WHEN r.image_group IS NULL THEN i.image_group ELSE r.image_group END, i.fate_field, r.fate_field, u.fate_field) AS fate
+	WHERE fate_rgb_field = 'discarded');
+
+--Set fate_reconciled = 'collected_via_nth' (when fate_rgb_field == collected_via_nth)
+UPDATE surv_ice_seals_2024.tbl_images i
+SET fate_reconciled = 'collected_via_nth'
+WHERE image_group IN
+	(SELECT image_group 
+	FROM (SELECT CASE WHEN r.image_group IS NULL THEN i.image_group ELSE r.image_group END AS image_group,
+				r.fate_field as fate_rgb_field, i.fate_field as fate_ir_field, u.fate_field as fate_uv_field
+			FROM (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'ir_image') i
+			FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'rgb_image') r
+			USING (image_group)
+			FULL JOIN (SELECT * FROM surv_ice_seals_2024.tbl_images WHERE image_type = 'uv_image') u
+			USING (image_group)
+			GROUP BY CASE WHEN r.image_group IS NULL THEN i.image_group ELSE r.image_group END, i.fate_field, r.fate_field, u.fate_field) AS fate
+	WHERE fate_rgb_field = 'collected_via_nth');
+
+

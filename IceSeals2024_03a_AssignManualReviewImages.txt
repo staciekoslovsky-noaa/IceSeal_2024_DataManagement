@@ -1,0 +1,47 @@
+--Set default values for rgb_manualreview and ml_imagestatus
+UPDATE surv_ice_seals_2024.tbl_images
+SET rgb_manualreview = 'NA';
+
+UPDATE surv_ice_seals_2024.tbl_images
+SET ml_imagestatus = 'unknown';
+
+--Assign fl03 and fl04 for no manual review and for being training images
+UPDATE surv_ice_seals_2024.tbl_images
+SET rgb_manualreview = 'N'
+WHERE flight = 'fl03' OR flight = 'fl04';
+
+UPDATE surv_ice_seals_2024.tbl_images
+SET ml_imagestatus = 'training'
+WHERE flight = 'fl03' OR flight = 'fl04';
+
+--Assign rest of images to be test images for ML
+UPDATE surv_ice_seals_2024.tbl_images
+SET ml_imagestatus = 'test'
+WHERE flight <> 'fl03' AND flight <> 'fl04';
+
+
+
+
+
+
+
+
+
+
+
+
+--COME BACK TO THE CODE LATER once the subset for fl01, fl02, fl05, fl05, fl08 has been determined for manual review; 
+--disregard the rest of the code in this file for now...
+
+UPDATE surv_ice_seals_2024.tbl_images
+SET rgb_manual_review = 'Y'
+WHERE dt IN (
+	SELECT dt 
+	FROM surv_ice_seals_2024.geo_images_footprint
+	INNER JOIN surv_ice_seals_2024.tbl_images USING (flight, dt, camera_view)
+	WHERE effort_reconciled = "ALL_SAMPLE" AND fate = "collected_via_nth");
+-- Double-check this is only fl03, 04, 05, 06
+
+
+
+
