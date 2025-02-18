@@ -66,7 +66,7 @@ meta2DB$camera_view <- ""
 meta2DB$camera_model <- ""
 meta2DB <- meta2DB[which(meta2DB == "test"), ]
 
-for (i in 21:nrow(image_dir)){
+for (i in 1:nrow(image_dir)){
   print(i)
   files <- list.files(image_dir$camera_dir[i], full.names = FALSE, recursive = FALSE)
   files <- data.frame(image_name = files[which(startsWith(files, projectPrefix) == TRUE)], stringsAsFactors = FALSE)
