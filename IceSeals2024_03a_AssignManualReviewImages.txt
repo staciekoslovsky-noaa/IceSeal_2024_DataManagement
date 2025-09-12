@@ -20,6 +20,29 @@ SET ml_imagestatus = 'test'
 WHERE flight <> 'fl03' AND flight <> 'fl04';
 
 
+--Set images that weren't reviewed to rgb_manualreview = 'N'
+--fl05_C
+UPDATE surv_ice_seals_2024.tbl_images
+SET rgb_manualreview = 'N'
+--SELECT * FROM surv_ice_seals_2024.tbl_images
+WHERE rgb_manualreview = 'Y'
+AND flight = 'fl05'
+AND dt > '20240608_001323.420198'
+AND dt < '20240608_013103.518906'
+AND camera_view = 'C'
+--ORDER BY dt DESC
+
+--fl05_L
+UPDATE surv_ice_seals_2024.tbl_images
+SET rgb_manualreview = 'N'
+--SELECT * FROM surv_ice_seals_2024.tbl_images
+WHERE rgb_manualreview = 'Y'
+AND flight = 'fl05'
+AND dt > '20240607_233350.892581'
+AND camera_view = 'L'
+--ORDER BY dt
+
+
 
 
 
